@@ -19,6 +19,7 @@ Start command: node server.js
 Environment variable:
 NODE_ENV=production
 PUBLIC_URL=https://你的公网域名
+DATABASE_URL=你的 Postgres 数据库连接地址
 ```
 
 如果平台要求手动指定监听地址，也设置：
@@ -46,6 +47,7 @@ node server.js
 ```text
 NODE_ENV=production
 PUBLIC_URL=https://你的-render-url.onrender.com
+DATABASE_URL=你的 Postgres Internal Database URL
 ```
 
 7. 部署完成后，打开 Render 给你的 HTTPS URL。
@@ -54,13 +56,36 @@ PUBLIC_URL=https://你的-render-url.onrender.com
 
 ## 关于数据保存
 
-当前 MVP 使用本地 JSON 文件保存 session 和回答：
+本地开发时，ClassPulse 会使用本地 JSON 文件保存 session 和回答：
 
 ```text
 work/classpulse-db.json
 ```
 
-这适合课堂 MVP 和短期测试。如果部署平台重启服务，且没有持久磁盘，数据可能丢失。正式长期使用时，建议下一步换成 SQLite、Postgres，或给部署服务挂载持久磁盘。
+部署到 Render 时，请使用 Postgres。只要设置了 `DATABASE_URL`，ClassPulse 会自动使用 Postgres 保存 session、问题和回答。这样服务休眠、重启或重新部署后，问卷仍然存在。
+
+### Render Postgres 设置
+
+1. 在 Render Dashboard 点 **New +**。
+2. 选择 **PostgreSQL**。
+3. 名字可以填：
+
+```text
+classpulse-db
+```
+
+4. 创建完成后，打开这个数据库页面。
+5. 找到 **Internal Database URL**，复制它。
+6. 回到 ClassPulse Web Service 的 **Environment** 页面。
+7. 添加：
+
+```text
+DATABASE_URL=刚才复制的 Internal Database URL
+```
+
+8. 保存后点 **Manual Deploy → Deploy latest commit**。
+
+注意：不要把数据库 URL 发到聊天里，也不要上传到 GitHub。
 
 ## 为什么不推荐只用老师电脑本地运行？
 
@@ -69,4 +94,3 @@ work/classpulse-db.json
 `http://192.168.x.x:4173` 只适合同一个 Wi-Fi 内使用。如果学生开 VPN、使用移动流量、或不在同一个网络，也可能打不开。
 
 公网 HTTPS URL 是唯一适合“所有学生都能扫码”的方式。
-

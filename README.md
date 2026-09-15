@@ -47,17 +47,19 @@ Environment variables:
 ```text
 NODE_ENV=production
 PUBLIC_URL=https://your-render-url.onrender.com
+DATABASE_URL=your-postgres-internal-database-url
 ```
 
 After deployment, open the public URL, create a session, and share the QR code from the tutor dashboard.
 
 ## Data Note
 
-The MVP stores session data in:
+By default, local development stores session data in:
 
 ```text
 work/classpulse-db.json
 ```
 
-This file is intentionally not committed to GitHub. For long-term production use, replace the local JSON file with a hosted database or persistent disk.
+This file is intentionally not committed to GitHub.
 
+On Render, set `DATABASE_URL` to a Postgres connection string. When `DATABASE_URL` is present, ClassPulse stores sessions, questions, and responses in Postgres instead of the local JSON file.

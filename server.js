@@ -19,9 +19,33 @@ const mime = {
 };
 
 let db = { sessions: {} };
+let pool = null;
 const clients = new Map();
 
-function ensureStore() {
+async function ensureStore() {
+  if (process.env.DATABASE_URL) {
+    const { Pool } = require("pg");
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+    });
+    await pool.query(`
+      create table if not exists classpulse_state (
+        id text primary key,
+        data jsonb not null,
+        updated_at timestamptz not null default now()
+      )
+    `);
+    const result = await pool.query("select data from classpulse_state where id = $1", ["main"]);
+    if (result.rows[0]) {
+      db = result.rows[0].data;
+    } else {
+      await pool.query("insert into classpulse_state (id, data) values ($1, $2)", ["main", db]);
+    }
+    console.log("ClassPulse storage: Postgres");
+    return;
+  }
+
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (fs.existsSync(DATA_FILE)) {
     try {
@@ -30,9 +54,19 @@ function ensureStore() {
       db = { sessions: {} };
     }
   }
+  console.log("ClassPulse storage: local JSON");
 }
 
-function save() {
+async function save() {
+  if (pool) {
+    await pool.query(`
+      insert into classpulse_state (id, data, updated_at)
+      values ($1, $2, now())
+      on conflict (id)
+      do update set data = excluded.data, updated_at = now()
+    `, ["main", db]);
+    return;
+  }
   fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
 }
 
@@ -172,7 +206,7 @@ async function routeApi(req, res, reqUrl) {
       responses: []
     };
     db.sessions[sessionId] = session;
-    save();
+    await save();
     return json(res, 201, {
       session: tutorSession(session),
       tutorPath: `/tutor.html?session=${sessionId}&token=${tutorToken}`,
@@ -189,7 +223,7 @@ async function routeApi(req, res, reqUrl) {
   if (!session) return json(res, 404, { error: "Session not found" });
   if (!session.joinBaseUrl) {
     session.joinBaseUrl = baseUrlFromReq(req);
-    save();
+    await save();
   }
 
   if (req.method === "GET" && parts.length === 3) {
@@ -209,7 +243,7 @@ async function routeApi(req, res, reqUrl) {
       return json(res, 400, { error: "Use an address like http://192.168.1.25:4173" });
     }
     session.joinBaseUrl = joinBaseUrl;
-    save();
+    await save();
     sendEvent(session.id);
     return json(res, 200, { session: tutorSession(session) });
   }
@@ -241,7 +275,7 @@ async function routeApi(req, res, reqUrl) {
       createdAt: new Date().toISOString()
     };
     session.questions.push(question);
-    save();
+    await save();
     sendEvent(session.id);
     return json(res, 201, { question, session: tutorSession(session) });
   }
@@ -252,7 +286,7 @@ async function routeApi(req, res, reqUrl) {
     const question = session.questions.find(q => q.id === parts[4]);
     if (!question) return json(res, 404, { error: "Question not found" });
     if (typeof body.isOpen === "boolean") question.isOpen = body.isOpen;
-    save();
+    await save();
     sendEvent(session.id);
     return json(res, 200, { question, session: tutorSession(session) });
   }
@@ -289,7 +323,7 @@ async function routeApi(req, res, reqUrl) {
       submittedAt: new Date().toISOString()
     };
     session.responses.push(response);
-    save();
+    await save();
     sendEvent(session.id);
     return json(res, 201, { ok: true });
   }
@@ -297,15 +331,18 @@ async function routeApi(req, res, reqUrl) {
   return json(res, 404, { error: "Unknown endpoint" });
 }
 
-ensureStore();
-
-http.createServer((req, res) => {
-  const reqUrl = new URL(req.url, `http://${req.headers.host}`);
-  if (reqUrl.pathname.startsWith("/api/")) {
-    routeApi(req, res, reqUrl).catch(error => json(res, 400, { error: error.message || "Request failed" }));
-  } else {
-    routeStatic(req, res, reqUrl.pathname);
-  }
-}).listen(PORT, HOST, () => {
-  console.log(`ClassPulse running at http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}`);
+ensureStore().then(() => {
+  http.createServer((req, res) => {
+    const reqUrl = new URL(req.url, `http://${req.headers.host}`);
+    if (reqUrl.pathname.startsWith("/api/")) {
+      routeApi(req, res, reqUrl).catch(error => json(res, 400, { error: error.message || "Request failed" }));
+    } else {
+      routeStatic(req, res, reqUrl.pathname);
+    }
+  }).listen(PORT, HOST, () => {
+    console.log(`ClassPulse running at http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}`);
+  });
+}).catch(error => {
+  console.error("Failed to start ClassPulse:", error);
+  process.exit(1);
 });

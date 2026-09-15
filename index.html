@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ClassPulse</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="entry-shell">
+      <section class="entry-panel" aria-labelledby="app-title">
+        <p class="eyebrow">Anonymous classroom response</p>
+        <h1 id="app-title">ClassPulse</h1>
+        <p class="lede">Create a live session, invite students by QR code, and discuss the results as bar charts and word clouds.</p>
+        <form id="session-form" class="stack">
+          <label>
+            <span>Session name</span>
+            <input name="title" value="Seminar feedback check-in" maxlength="90" required>
+          </label>
+          <label>
+            <span>Context</span>
+            <input name="institution" value="UK university classroom" maxlength="90">
+          </label>
+          <button class="primary" type="submit">Create tutor session</button>
+        </form>
+      </section>
+    </main>
+    <script>
+      document.querySelector("#session-form").addEventListener("submit", async event => {
+        event.preventDefault();
+        const button = event.submitter;
+        button.disabled = true;
+        button.textContent = "Creating...";
+        const body = Object.fromEntries(new FormData(event.currentTarget));
+        const response = await fetch("/api/sessions", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        if (response.ok) window.location.href = data.tutorPath;
+        else {
+          button.disabled = false;
+          button.textContent = "Create tutor session";
+          alert(data.error || "Could not create the session.");
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "classpulse-mvp",
+  "version": "1.0.0",
+  "description": "Anonymous classroom response MVP for a UK university tutor.",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  }
+}
